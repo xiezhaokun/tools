@@ -1,0 +1,181 @@
+<!--
+ Copyright (c) 2026, Huawei Technologies Co., Ltd. All rights reserved.
+ This code is free software; you can redistribute it and/or modify it
+ under the terms of the GNU General Public License version 2 only, as
+ published by the Free Software Foundation. Oracle designates this file
+ as subject to the "Classpath" exception in the accompanying LICENSE.
+-->
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CDS JSA 可视化解析器</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">BiSheng JDK · CDS Archive Inspector</p>
+        <h1>CDS JSA 可视化解析器</h1>
+        <p class="subtitle">在浏览器本地解析 HotSpot CDS 静态/动态归档。文件不会上传。</p>
+      </div>
+      <button id="resetButton" class="secondary" type="button" hidden>重新选择</button>
+    </header>
+
+    <section id="dropZone" class="drop-zone" aria-label="导入 JSA 文件">
+      <input id="fileInput" type="file" accept=".jsa,application/octet-stream" hidden>
+      <div class="drop-icon" aria-hidden="true">JSA</div>
+      <h2>拖入 .jsa 文件</h2>
+      <p>或选择由 <code>-Xshare:dump</code>、<code>-XX:ArchiveClassesAtExit</code> 生成的归档</p>
+      <button id="chooseButton" class="primary" type="button">选择文件</button>
+      <p class="format-note">针对本仓库 JDK 21 CDS v18；兼容 v13+ 通用头，完整字段按 32/64 位 C ABI 自动识别。</p>
+    </section>
+
+    <section id="errorPanel" class="error-panel" hidden>
+      <h2>无法解析</h2>
+      <p id="errorMessage"></p>
+    </section>
+
+    <div id="report" hidden>
+      <section class="summary-grid" aria-label="归档摘要">
+        <article class="metric"><span>归档类型</span><strong id="archiveType">—</strong></article>
+        <article class="metric"><span>CDS 版本</span><strong id="archiveVersion">—</strong></article>
+        <article class="metric"><span>文件大小</span><strong id="archiveSize">—</strong></article>
+        <article class="metric"><span>头部校验</span><strong id="headerCrc">—</strong></article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">FILE MAP</p>
+            <h2>文件空间布局</h2>
+          </div>
+          <div class="legend" aria-label="区域图例">
+            <span><i class="swatch header-color"></i>Header</span>
+            <span><i class="swatch rw-color"></i>RW</span>
+            <span><i class="swatch ro-color"></i>RO</span>
+            <span><i class="swatch bm-color"></i>BM</span>
+            <span><i class="swatch hp-color"></i>HP</span>
+          </div>
+        </div>
+        <div id="fileMap" class="file-map" role="img" aria-label="JSA 文件区域分布"></div>
+        <div id="fileMapScale" class="file-map-scale"></div>
+        <p class="hint">点击区域查看详情和对应文件字节。区域宽度使用平方根比例，以便小区域仍可见。</p>
+      </section>
+
+      <section class="two-column">
+        <article class="panel">
+          <div class="panel-heading compact">
+            <div>
+              <p class="section-kicker">REGIONS</p>
+              <h2>区域明细</h2>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>区域</th><th>文件偏移</th><th>映射偏移</th><th>有效大小</th><th>属性 / 位图</th><th>CRC</th></tr></thead>
+              <tbody id="regionRows"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-heading compact">
+            <div>
+              <p class="section-kicker">VALIDATION</p>
+              <h2>校验与诊断</h2>
+            </div>
+          </div>
+          <ul id="diagnostics" class="diagnostics"></ul>
+        </article>
+      </section>
+
+      <section class="panel content-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">REGION CONTENTS</p>
+            <h2>区域内容与引用关系</h2>
+          </div>
+          <label class="hex-control">表格最多显示
+            <select id="contentLimit">
+              <option value="100">100 项</option>
+              <option value="250" selected>250 项</option>
+              <option value="1000">1000 项</option>
+            </select>
+          </label>
+        </div>
+        <nav id="contentTabs" class="content-tabs" aria-label="区域内容">
+          <button type="button" data-content-tab="RW" aria-pressed="true">RW</button>
+          <button type="button" data-content-tab="RO" aria-pressed="false">RO</button>
+          <button type="button" data-content-tab="BM" aria-pressed="false">BM</button>
+          <button type="button" data-content-tab="HP" aria-pressed="false">HP</button>
+          <button type="button" data-content-tab="JVM" aria-pressed="false">Klass / Symbol</button>
+        </nav>
+        <div id="contentView"></div>
+      </section>
+
+      <section class="panel jvm-import-panel">
+        <div class="panel-heading compact">
+          <div>
+            <p class="section-kicker">JVM ASSIST</p>
+            <h2>Klass / Symbol 辅助报告</h2>
+          </div>
+          <div>
+            <input id="jvmReportInput" type="file" accept=".txt,.log,text/plain" hidden>
+            <button id="jvmReportButton" class="secondary" type="button">导入 JVM 输出</button>
+          </div>
+        </div>
+        <p class="hint command-hint">用生成归档的同版本 JVM 执行：<code>java -XX:+PrintSharedArchiveAndExit -XX:SharedArchiveFile=/path/to/classes.jsa &gt; archive-report.txt 2&gt;&amp;1</code>。导入后可浏览精确的共享 Klass 清单及 Symbol/String 统计；报告本身不含对象地址。</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">HEADER</p>
+            <h2>FileMapHeader</h2>
+          </div>
+          <button id="exportButton" class="secondary" type="button">导出 JSON</button>
+        </div>
+        <div class="header-meta">
+          <span id="abiBadge" class="badge"></span>
+          <span id="magicBadge" class="badge"></span>
+          <span id="jvmIdent" class="jvm-ident"></span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>偏移</th><th>字段</th><th>值</th><th>说明</th></tr></thead>
+            <tbody id="headerRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">HEX VIEW</p>
+            <h2 id="hexTitle">Header 十六进制</h2>
+          </div>
+          <label class="hex-control">显示
+            <select id="hexLength">
+              <option value="256">256 B</option>
+              <option value="512" selected>512 B</option>
+              <option value="1024">1 KiB</option>
+              <option value="4096">4 KiB</option>
+            </select>
+          </label>
+        </div>
+        <pre id="hexView" class="hex-view" tabindex="0"></pre>
+      </section>
+
+      <section class="panel limits">
+        <p><strong>解析边界：</strong>BM 位图与其标记的 RW/RO/HP 引用槽可从文件精确还原。Klass、Symbol 及 Java oop 的对象边界/类型没有通用对象目录，依赖同一 HotSpot 构建的 C++ 类型布局和运行时编码；本工具不会把字符串扫描结果冒充对象解析，可导入 JVM 报告补充 Klass 清单。</p>
+      </section>
+    </div>
+  </main>
+
+  <script src="jsa-parser.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
