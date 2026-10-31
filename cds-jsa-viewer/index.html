@@ -92,6 +92,27 @@
         </article>
       </section>
 
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">HEADER</p>
+            <h2>FileMapHeader</h2>
+          </div>
+          <button id="exportButton" class="secondary" type="button">导出 JSON</button>
+        </div>
+        <div class="header-meta">
+          <span id="abiBadge" class="badge"></span>
+          <span id="magicBadge" class="badge"></span>
+          <span id="jvmIdent" class="jvm-ident"></span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>偏移</th><th>字段</th><th>值</th><th>说明</th></tr></thead>
+            <tbody id="headerRows"></tbody>
+          </table>
+        </div>
+      </section>
+
       <section class="panel region-struct-panel">
         <div class="panel-heading">
           <div>
@@ -152,27 +173,6 @@
           </div>
         </div>
         <p class="hint command-hint">用生成归档的同版本 JVM 执行：<code>java -XX:+PrintSharedArchiveAndExit -XX:SharedArchiveFile=/path/to/classes.jsa &gt; archive-report.txt 2&gt;&amp;1</code>。导入后可浏览精确的共享 Klass 清单及 Symbol/String 统计；报告本身不含对象地址。</p>
-      </section>
-
-      <section class="panel">
-        <div class="panel-heading">
-          <div>
-            <p class="section-kicker">HEADER</p>
-            <h2>FileMapHeader</h2>
-          </div>
-          <button id="exportButton" class="secondary" type="button">导出 JSON</button>
-        </div>
-        <div class="header-meta">
-          <span id="abiBadge" class="badge"></span>
-          <span id="magicBadge" class="badge"></span>
-          <span id="jvmIdent" class="jvm-ident"></span>
-        </div>
-        <div class="table-scroll">
-          <table>
-            <thead><tr><th>偏移</th><th>字段</th><th>值</th><th>说明</th></tr></thead>
-            <tbody id="headerRows"></tbody>
-          </table>
-        </div>
       </section>
 
       <section class="panel">
