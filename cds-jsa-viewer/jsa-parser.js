@@ -133,17 +133,23 @@
     const regionSize = 24 + 8 * size;
     for (let index = 0; index < 4; index++) {
       const base = 24 + index * regionSize;
+      const rawReadOnly = reader.i32(base + 4);
+      const rawAllowExec = reader.i32(base + 8);
+      const rawIsHeap = reader.i32(base + 12);
+      const rawIsBitmap = reader.i32(base + 16);
+      const rawMappedFromFile = reader.i32(base + 20);
       const region = {
         index,
         name: REGION_NAMES[index],
         description: REGION_DESCRIPTIONS[index],
         headerOffset: base,
+        structSize: regionSize,
         crc: reader.u32(base),
-        readOnly: reader.i32(base + 4) !== 0,
-        allowExec: reader.i32(base + 8) !== 0,
-        isHeap: reader.i32(base + 12) !== 0,
-        isBitmap: reader.i32(base + 16) !== 0,
-        mappedFromFile: reader.i32(base + 20) !== 0
+        readOnly: rawReadOnly !== 0,
+        allowExec: rawAllowExec !== 0,
+        isHeap: rawIsHeap !== 0,
+        isBitmap: rawIsBitmap !== 0,
+        mappedFromFile: rawMappedFromFile !== 0
       };
       let p = base + 24;
       region.fileOffset = reader.ptr(p); p += size;
@@ -154,6 +160,26 @@
       region.ptrmapOffset = reader.ptr(p); p += size;
       region.ptrmapSizeBits = reader.ptr(p); p += size;
       region.mappedBase = reader.ptr(p);
+      const field = (name, relativeOffset, byteSize, cType, value, description, kind) => ({
+        name, relativeOffset, offset: base + relativeOffset, size: byteSize,
+        cType, value, description, kind: kind || "number"
+      });
+      region.fields = [
+        field("_crc", 0, 4, "int", region.crc, "区域数据的 CRC32 校验值", "crc"),
+        field("_read_only", 4, 4, "int", rawReadOnly, "区域是否以只读权限使用", "flag"),
+        field("_allow_exec", 8, 4, "int", rawAllowExec, "区域是否允许执行代码", "flag"),
+        field("_is_heap_region", 12, 4, "int", rawIsHeap, "是否为归档 Java Heap 区域", "flag"),
+        field("_is_bitmap_region", 16, 4, "int", rawIsBitmap, "是否为重定位 bitmap 区域", "flag"),
+        field("_mapped_from_file", 20, 4, "int", rawMappedFromFile, "运行时是否直接从文件 mmap；归档文件中通常为 0", "flag"),
+        field("_file_offset", 24, size, "size_t", region.fileOffset, "区域有效数据在 JSA 文件中的起始偏移", "pointer"),
+        field("_mapping_offset", 24 + size, size, "size_t", region.mappingOffset, "相对 requested base 的请求映射偏移；BM 固定为 0", "pointer"),
+        field("_used", 24 + 2 * size, size, "size_t", region.used, "区域实际有效字节数，不包含文件对齐 padding", "size"),
+        field("_oopmap_offset", 24 + 3 * size, size, "size_t", region.oopmapOffset, "HP oopmap 相对 BM 区起点的字节偏移", "pointer"),
+        field("_oopmap_size_in_bits", 24 + 4 * size, size, "size_t", region.oopmapSizeBits, "HP oopmap 的有效 bit 数", "size"),
+        field("_ptrmap_offset", 24 + 5 * size, size, "size_t", region.ptrmapOffset, "HP native ptrmap 相对 BM 区起点的字节偏移", "pointer"),
+        field("_ptrmap_size_in_bits", 24 + 6 * size, size, "size_t", region.ptrmapSizeBits, "HP native ptrmap 的有效 bit 数", "size"),
+        field("_mapped_base", 24 + 7 * size, size, "char*", region.mappedBase, "运行时实际映射地址；归档文件中通常为 NULL", "pointer")
+      ];
       regions.push(region);
     }
     return regions;

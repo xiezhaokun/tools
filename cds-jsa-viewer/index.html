@@ -92,6 +92,29 @@
         </article>
       </section>
 
+      <section class="panel region-struct-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">CDSFileMapRegion</p>
+            <h2>区域结构原始字段</h2>
+          </div>
+          <nav id="regionStructTabs" class="region-struct-tabs" aria-label="选择 CDSFileMapRegion">
+            <button type="button" data-region-struct="0" aria-pressed="true">RW[0]</button>
+            <button type="button" data-region-struct="1" aria-pressed="false">RO[1]</button>
+            <button type="button" data-region-struct="2" aria-pressed="false">BM[2]</button>
+            <button type="button" data-region-struct="3" aria-pressed="false">HP[3]</button>
+          </nav>
+        </div>
+        <div id="regionStructMeta" class="header-meta"></div>
+        <div class="table-scroll">
+          <table class="region-struct-table">
+            <thead><tr><th>Header 偏移</th><th>结构内偏移</th><th>字段</th><th>C 类型</th><th>原始值</th><th>解释</th></tr></thead>
+            <tbody id="regionFieldRows"></tbody>
+          </table>
+        </div>
+        <p class="hint">字段布局来自 <code>src/hotspot/share/include/cds.h</code> 的 <code>CDSFileMapRegion</code>；表中偏移按当前文件自动识别的 32/64 位 C ABI 计算。</p>
+      </section>
+
       <section class="panel content-panel">
         <div class="panel-heading">
           <div>
@@ -111,6 +134,7 @@
           <button type="button" data-content-tab="RO" aria-pressed="false">RO</button>
           <button type="button" data-content-tab="BM" aria-pressed="false">BM</button>
           <button type="button" data-content-tab="HP" aria-pressed="false">HP</button>
+          <button type="button" data-content-tab="CAOA" aria-pressed="false">CA / OA（逻辑）</button>
           <button type="button" data-content-tab="JVM" aria-pressed="false">Klass / Symbol</button>
         </nav>
         <div id="contentView"></div>

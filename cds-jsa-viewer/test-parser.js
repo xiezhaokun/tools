@@ -21,6 +21,10 @@ const report = parser.parse(fs.readFileSync(path.resolve(file)));
 if (!report.headerCrcValid) throw new Error("header CRC failed");
 for (const region of report.regions) {
   if (!region.crcValid) throw new Error(`${region.name} CRC failed`);
+  if (!region.fields || region.fields.length !== 14) throw new Error(`${region.name} CDSFileMapRegion fields missing`);
+  for (const required of ["_crc", "_read_only", "_allow_exec", "_is_heap_region", "_is_bitmap_region", "_mapped_from_file", "_file_offset", "_mapping_offset", "_used", "_oopmap_offset", "_oopmap_size_in_bits", "_ptrmap_offset", "_ptrmap_size_in_bits", "_mapped_base"]) {
+    if (!region.fields.some(field => field.name === required)) throw new Error(`${region.name}.${required} missing`);
+  }
 }
 if (!report.contents.available) throw new Error(`region contents unavailable: ${report.contents.reason}`);
 const metaMap = report.contents.bitmaps.find(map => map.key === "metaspace");

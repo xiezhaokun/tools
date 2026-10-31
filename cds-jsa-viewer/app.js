@@ -11,7 +11,7 @@
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const state = { report: null, fileName: "", selection: { name: "Header", offset: 0, size: 0 }, contentTab: "RW", jvmReport: null };
+  const state = { report: null, fileName: "", selection: { name: "Header", offset: 0, size: 0 }, contentTab: "RW", regionStructIndex: 0, jvmReport: null };
   const typeNames = { static: "静态归档", dynamic: "动态归档", "aggressive-dynamic": "Aggressive 动态归档" };
   const colors = { RW: "rw", RO: "ro", BM: "bm", HP: "hp" };
 
@@ -69,6 +69,28 @@
       const r = state.report.regions[Number(row.dataset.region)];
       selectSegment({ name: r.name, className: colors[r.name], offset: Number(r.fileOffset), size: Number(r.used) });
       $("hexView").scrollIntoView({ behavior: "smooth", block: "center" });
+    }));
+  }
+
+  function displayRegionField(field) {
+    if (field.kind === "crc") return `${hex(field.value, 8)} (${field.value >>> 0})`;
+    if (field.kind === "flag") return `${field.value} (${field.value ? "true" : "false"})`;
+    if (typeof field.value === "bigint") {
+      const value = hex(field.value, state.report.pointerSize * 2);
+      return field.kind === "size" ? `${value} (${field.value.toString(10)})` : value;
+    }
+    return String(field.value);
+  }
+
+  function renderRegionStruct() {
+    const region = state.report.regions[state.regionStructIndex];
+    $("regionStructTabs").querySelectorAll("[data-region-struct]").forEach(button => {
+      button.setAttribute("aria-pressed", String(Number(button.dataset.regionStruct) === state.regionStructIndex));
+    });
+    $("regionStructMeta").innerHTML = `<span class="badge">${region.name}[${region.index}]</span><span class="badge">struct ${region.structSize} B</span><span class="badge">header @ ${hex(region.headerOffset, 4)}</span><span class="badge">ABI ${state.report.pointerSize * 8}-bit</span><span class="jvm-ident">stored CRC ${hex(region.crc, 8)} · computed CRC ${region.computedCrc === null ? "—" : hex(region.computedCrc, 8)} · ${region.crcValid ? "一致" : "不一致"}</span>`;
+    $("regionFieldRows").innerHTML = region.fields.map(field => `<tr data-region-field-offset="${field.offset}"><td class="mono">${hex(field.offset, 4)}</td><td class="mono">+${hex(field.relativeOffset, 2)}</td><td class="mono"><strong>${escapeHtml(field.name)}</strong></td><td class="mono">${escapeHtml(field.cType)} / ${field.size} B</td><td class="mono">${escapeHtml(displayRegionField(field))}</td><td>${escapeHtml(field.description)}</td></tr>`).join("");
+    $("regionFieldRows").querySelectorAll("[data-region-field-offset]").forEach(row => row.addEventListener("click", () => {
+      jumpToFile(Number(row.dataset.regionFieldOffset), `${region.name} Header`);
     }));
   }
 
@@ -140,6 +162,11 @@
     $("contentView").innerHTML = `<div class="region-intro"><div><strong>HP · 归档 Java Heap 对象</strong><p>oopmap 标识 Java 引用；ptrmap 标识对象头或字段中的原生 Klass 指针。</p></div><span>${formatBytes(state.report.regions[3].used)}</span></div><div class="bitmap-grid compact-grid">${slotSummary(oopMap)}${slotSummary(nativeMap)}</div><div class="subsection"><h3>Java oop 引用槽</h3><p class="hint">槽宽 ${contents.oopSlotSize} B；压缩 oop 按 Header 中 narrow_oop_base / shift 解码。</p>${oopTable}</div><div class="subsection"><h3>Native Klass 指针槽</h3>${nativeTable}</div><div class="content-callout"><strong>对象边界说明</strong> oopmap 描述“哪里有引用”，并不描述“对象从哪里开始”。对象遍历还需要 Klass 布局、压缩 Klass 编码和同版本 VM 类型信息。</div>`;
     bindSlotJumps();
   }
+  function renderCaOaContent() {
+    const hp = state.report.regions.find(region => region.name === "HP");
+    const hasHp = hp && hp.used > 0n;
+    $("contentView").innerHTML = `<div class="region-intro"><div><strong>CA / OA · Archived Java Heap 的逻辑分类</strong><p>CA/OA 是 HotSpot 对归档堆对象可变性和 GC 使用方式的逻辑分类，不是当前 JSA Header 中的独立物理区域。</p></div><span>${hasHp ? formatBytes(hp.used) : "HP 为空"}</span></div><div class="ca-oa-grid"><article class="archive-kind closed"><h3>CA · Closed Archive</h3><span class="kind-tag">逻辑类别</span><p>关闭归档对象：运行时视为不可变，典型是归档 String 或不再修改的对象。旧版 JDK 曾把它写入独立的 closed archive heap region。</p><dl><div><dt>当前 JDK 21 物理区</dt><dd>HP（无法单独切片）</dd></div><div><dt>典型运行时行为</dt><dd>可映射为归档堆对象，GC 不按普通可变对象处理</dd></div></dl></article><article class="archive-kind open"><h3>OA · Open Archive</h3><span class="kind-tag">逻辑类别</span><p>开放归档对象：运行时可能需要修改或由 GC 管理，典型是类镜像、resolved references、模块图等对象。</p><dl><div><dt>当前 JDK 21 物理区</dt><dd>HP（无法单独切片）</dd></div><div><dt>典型运行时行为</dt><dd>可直接映射（G1）或加载复制，并执行 oop/native 指针修补</dd></div></dl></article></div><div class="content-callout"><strong>为什么工具没有 CA/OA 两个文件区？</strong> JDK 21 的 <code>MetaspaceShared::n_regions</code> 固定为 4：RW、RO、BM、HP。HP 统一承载归档 Java Heap 数据；BM 中的 oopmap/ptrmap 描述引用槽，而不是 CA/OA 分类。若要区分某个 HP 对象属于 CA 还是 OA，需要同版本 JVM 在 dump/load 阶段导出对象元数据，不能仅凭 JSA 的 FileMapRegion 字段推导。</div>${hasHp ? `<div class="content-callout"><strong>当前文件状态：</strong>检测到 HP 区 ${formatBytes(hp.used)}；请在 HP 页签查看 oopmap、ptrmap 和引用槽。</div>` : `<p class="empty-state">当前 JSA 的 HP 区为空，因此没有可查看的归档堆对象。动态归档常见此情况。</p>`}`;
+  }
   function renderJvmContent() {
     const report = state.jvmReport;
     if (!report) {
@@ -165,6 +192,7 @@
     if (state.contentTab === "RW" || state.contentTab === "RO") renderCoreContent(state.contentTab);
     else if (state.contentTab === "BM") renderBitmapContent();
     else if (state.contentTab === "HP") renderHeapContent();
+    else if (state.contentTab === "CAOA") renderCaOaContent();
     else renderJvmContent();
   }
 
@@ -211,7 +239,7 @@
     $("archiveVersion").textContent = `v${report.generic.version}`;
     $("archiveSize").textContent = formatBytes(report.fileSize);
     $("headerCrc").innerHTML = report.headerCrcValid ? '<span class="status ok">校验通过</span>' : '<span class="status bad">校验失败</span>';
-    renderFileMap(); renderRegions(); renderDiagnostics(); renderHeader(); renderContent();
+    renderFileMap(); renderRegions(); renderRegionStruct(); renderDiagnostics(); renderHeader(); renderContent();
     selectSegment({ name: "Header", className: "header", offset: 0, size: report.generic.headerSize });
     $("dropZone").hidden = true; $("errorPanel").hidden = true; $("report").hidden = false; $("resetButton").hidden = false;
   }
@@ -229,7 +257,7 @@
   }
 
   function reset() {
-    state.report = null; state.jvmReport = null; state.contentTab = "RW"; $("fileInput").value = ""; $("jvmReportInput").value = ""; $("dropZone").hidden = false; $("errorPanel").hidden = true; $("report").hidden = true; $("resetButton").hidden = true;
+    state.report = null; state.jvmReport = null; state.contentTab = "RW"; state.regionStructIndex = 0; $("fileInput").value = ""; $("jvmReportInput").value = ""; $("dropZone").hidden = false; $("errorPanel").hidden = true; $("report").hidden = true; $("resetButton").hidden = true;
   }
   function exportJson() {
     const blob = new Blob([JSON.stringify(JsaParser.jsonSafe(state.report), null, 2)], { type: "application/json" });
@@ -243,6 +271,10 @@
   $("hexLength").addEventListener("change", renderHex);
   $("contentLimit").addEventListener("change", renderContent);
   $("contentTabs").querySelectorAll("[data-content-tab]").forEach(button => button.addEventListener("click", () => { state.contentTab = button.dataset.contentTab; renderContent(); }));
+  $("regionStructTabs").querySelectorAll("[data-region-struct]").forEach(button => button.addEventListener("click", () => {
+    state.regionStructIndex = Number(button.dataset.regionStruct);
+    renderRegionStruct();
+  }));
   $("jvmReportButton").addEventListener("click", () => $("jvmReportInput").click());
   $("jvmReportInput").addEventListener("change", async event => {
     const file = event.target.files[0];
