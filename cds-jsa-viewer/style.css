@@ -125,6 +125,10 @@ tbody tr[data-region]:hover { background: var(--surface-2); }
 .jvm-stats strong { font-size: 17px; }
 .command-hint { line-height: 1.7; overflow-wrap: anywhere; }
 .jvm-import-panel .panel-heading { margin-bottom: 5px; }
+.layout-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.layout-cards article { border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); padding: 13px; }
+.layout-cards h3 { font-size: 14px; margin: 0 0 7px; }
+.layout-cards p { color: var(--muted); font-size: 12px; line-height: 1.6; margin: 0; }
 
 @media (max-width: 850px) {
   .summary-grid { grid-template-columns: repeat(2, 1fr); }
@@ -132,6 +136,7 @@ tbody tr[data-region]:hover { background: var(--surface-2); }
   .panel-heading { align-items: flex-start; flex-direction: column; }
   .bitmap-grid, .bitmap-grid.compact-grid { grid-template-columns: 1fr; }
   .jvm-stats { grid-template-columns: repeat(2, 1fr); }
+  .layout-cards { grid-template-columns: 1fr; }
 }
 @media (max-width: 540px) {
   .shell { width: min(100% - 20px, 1180px); padding-top: 24px; }
